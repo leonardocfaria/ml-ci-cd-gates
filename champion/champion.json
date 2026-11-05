@@ -1,0 +1,146 @@
+{
+  "metrics": {
+    "roc_auc": 0.995619,
+    "accuracy": 0.959064,
+    "f1": 0.967136,
+    "log_loss": 0.084566
+  },
+  "params": {
+    "C": 1.0,
+    "max_iter": 1000,
+    "features": "all"
+  },
+  "schema": {
+    "columns": [
+      {
+        "name": "mean_radius",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_texture",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_perimeter",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_area",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_smoothness",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_compactness",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_concavity",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_concave_points",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_symmetry",
+        "dtype": "float"
+      },
+      {
+        "name": "mean_fractal_dimension",
+        "dtype": "float"
+      },
+      {
+        "name": "radius_error",
+        "dtype": "float"
+      },
+      {
+        "name": "texture_error",
+        "dtype": "float"
+      },
+      {
+        "name": "perimeter_error",
+        "dtype": "float"
+      },
+      {
+        "name": "area_error",
+        "dtype": "float"
+      },
+      {
+        "name": "smoothness_error",
+        "dtype": "float"
+      },
+      {
+        "name": "compactness_error",
+        "dtype": "float"
+      },
+      {
+        "name": "concavity_error",
+        "dtype": "float"
+      },
+      {
+        "name": "concave_points_error",
+        "dtype": "float"
+      },
+      {
+        "name": "symmetry_error",
+        "dtype": "float"
+      },
+      {
+        "name": "fractal_dimension_error",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_radius",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_texture",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_perimeter",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_area",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_smoothness",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_compactness",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_concavity",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_concave_points",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_symmetry",
+        "dtype": "float"
+      },
+      {
+        "name": "worst_fractal_dimension",
+        "dtype": "float"
+      },
+      {
+        "name": "target",
+        "dtype": "int"
+      }
+    ],
+    "labels": [
+      0,
+      1
+    ]
+  },
+  "eval_sha256": "9e878c8c3712866fc88f36dc721d3802a6fe4bd49b7e081b0590dd6be40080af"
+}
