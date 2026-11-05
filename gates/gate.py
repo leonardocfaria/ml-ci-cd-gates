@@ -25,14 +25,26 @@ GATES = {"roc_auc": (True, 0.005), "accuracy": (True, 0.01), "f1": (True, 0.01),
 
 
 def read_csv(path: Path):
+    """(header, float matrix). Raises ValueError with a readable message on non-numeric, empty or NaN cells."""
     with path.open() as f:
         rows = list(csv.reader(f))
-    header, body = rows[0], np.array(rows[1:], dtype=float)
+    if len(rows) < 2:
+        raise ValueError(f"{path.name}: no data rows")
+    header = rows[0]
+    try:
+        body = np.array(rows[1:], dtype=float)
+    except ValueError as e:
+        raise ValueError(f"{path.name}: non-numeric or ragged data ({e})") from None
+    bad = [header[j] for j in np.where(np.isnan(body).any(0))[0]]
+    if bad:
+        raise ValueError(f"{path.name}: missing values in {bad}")
     return header, body
 
 
 def schema(header, body) -> dict:
-    """Columns in order with dtype (int if every value is integral, else float) and the label set."""
+    """Columns with dtype (int if every value is integral, else float) and the label set. Column order is not
+    part of the contract (training selects columns by name). shortcut: the int/float rule is a heuristic that a
+    tiny sample of an integral-looking float column could flip; declare dtypes explicitly for real data."""
     cols = [{"name": h, "dtype": "int" if np.all(body[:, j] == np.round(body[:, j])) else "float"} for j, h in enumerate(header)]
     labels = sorted(set(body[:, header.index(TARGET)].astype(int).tolist())) if TARGET in header else []
     return {"columns": cols, "labels": labels}
@@ -50,7 +62,11 @@ def schema_diff(expected: dict, actual: dict) -> list[str]:
 def train_and_eval(params: dict, train_path: Path, eval_path: Path) -> tuple[dict, dict]:
     th, tb = read_csv(train_path)
     eh, eb = read_csv(eval_path)
-    feats = [h for h in th if h != TARGET and (params.get("features", "all") == "all" or h in params["features"])]
+    wanted = params.get("features", "all")
+    unknown = [] if wanted == "all" else sorted(set(wanted) - set(th))
+    if unknown:
+        raise ValueError(f"params.json lists unknown features {unknown}")
+    feats = [h for h in th if h != TARGET and (wanted == "all" or h in wanted)]
     X = tb[:, [th.index(f) for f in feats]]
     y = tb[:, th.index(TARGET)]
     model = make_pipeline(StandardScaler(), LogisticRegression(C=params["C"], max_iter=params.get("max_iter", 1000)))
@@ -68,27 +84,35 @@ def train_and_eval(params: dict, train_path: Path, eval_path: Path) -> tuple[dic
 def gate(candidate: dict, champion: dict) -> list[dict]:
     rows = []
     for m, (higher, tol) in GATES.items():
-        delta = candidate[m] - champion[m]
+        delta = round(candidate[m] - champion[m], 6)  # metrics are 6-dp rounded: no float noise at the boundary
         ok = delta >= -tol if higher else delta <= tol
         rows.append({"metric": m, "champion": champion[m], "candidate": candidate[m], "delta": round(delta, 6),
                      "allowed": f"{'-' if higher else '+'}{tol}", "pass": ok})
     return rows
 
 
-def run(root: Path = ROOT, out: Path | None = None, promote: bool = False) -> dict:
+def run(root: Path = ROOT, out: Path | None = None, promote: bool = False, champion_path: Path | None = None) -> dict:
+    """champion_path: the champion to compare with. CI passes the copy from the PR's *base* branch, so a PR
+    cannot weaken the bar (or swap the eval set, whose hash the champion pins) by editing champion.json."""
     out = out or root / "report"
     out.mkdir(parents=True, exist_ok=True)
     params = json.loads((root / "params.json").read_text())
-    champion = json.loads((root / "champion" / "champion.json").read_text())
-    data_schema = schema(*read_csv(root / "data" / "train.csv"))
+    champion = json.loads((champion_path or root / "champion" / "champion.json").read_text())
     eval_hash = hashlib.sha256((root / "data" / "eval.csv").read_bytes()).hexdigest()
-    problems = schema_diff(champion["schema"], data_schema)
+    metrics, info, gates, data_schema = None, {}, [], None
+    try:
+        data_schema = schema(*read_csv(root / "data" / "train.csv"))
+        problems = schema_diff(champion["schema"], data_schema)
+    except ValueError as e:
+        problems = [str(e)]
     if eval_hash != champion["eval_sha256"]:
         problems.append("the fixed eval set changed (eval.csv hash differs): metrics would not be comparable")
-    metrics, info, gates = None, {}, []
     if not problems:  # only train when the data contract holds
-        metrics, info = train_and_eval(params, root / "data" / "train.csv", root / "data" / "eval.csv")
-        gates = gate(metrics, champion["metrics"])
+        try:
+            metrics, info = train_and_eval(params, root / "data" / "train.csv", root / "data" / "eval.csv")
+            gates = gate(metrics, champion["metrics"])
+        except ValueError as e:
+            problems.append(str(e))
     passed = not problems and all(g["pass"] for g in gates)
     report = {"passed": passed, "schema_problems": problems, "gates": gates, "candidate_metrics": metrics,
               "champion_metrics": champion["metrics"], "params": params, **info}
@@ -121,7 +145,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--promote", action="store_true")
     p.add_argument("--out", type=Path)
+    p.add_argument("--champion", type=Path, help="champion.json to compare with (CI: the base branch's copy)")
     a = p.parse_args()
-    rep = run(ROOT, a.out, a.promote)
+    rep = run(ROOT, a.out, a.promote, a.champion)
     print(render(rep))
     sys.exit(0 if rep["passed"] else 1)

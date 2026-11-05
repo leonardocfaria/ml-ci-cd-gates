@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 ## Usage
 ```bash
-python -m pytest -q             # 11 tests, ~5 s: includes deliberately bad changes that must fail
+python -m pytest -q             # 16 tests, ~6 s: includes deliberately bad changes that must fail
 python -m gates.gate            # what CI runs: exit 0 = pass, 1 = fail; writes report/report.{md,json}
 python -m gates.gate --promote  # after merge to main: candidate becomes the champion (commit champion/champion.json)
 ```
@@ -50,7 +50,7 @@ Gates (allowed regression vs champion):
 | log-loss | +0.02 |
 
 The schema check looks at:
-- column names and order-independent presence;
+- column names (order does not matter: training selects by name);
 - dtype (int vs float);
 - the label set.
 
@@ -70,6 +70,11 @@ The current champion is `C=1.0`, all 30 features: ROC AUC 0.9956, accuracy 0.959
 | eval set edited | **fail** | eval hash differs |
 
 Each row is a test in `tests/test_gate.py`. The tests run the gate on a copy of the template with the change applied, and also check the CLI exit codes 0 and 1.
+
+## Trust boundary
+- **Champion and eval set.** On a pull request, CI reads `champion/champion.json` **from the base branch** (`--champion`). The champion pins the eval set's SHA-256, so editing either file in the PR cannot lower the bar. A test shows that a weakened in-PR champion is ignored. The only exception is a bootstrap PR that introduces the template: there is no base champion yet, and CI warns.
+- **The gate code itself.** Tolerances live in `gates/gate.py`, so a PR could still edit them. Protect `gates/` and `champion/` with CODEOWNERS and a required review; branch protection is outside a template's reach.
+- **Bad data.** Non-numeric, empty or NaN cells, and unknown feature names, fail the gate with a readable message, and the report is still written and uploaded.
 
 ## Not done (time box)
 Automatic champion promotion committed by CI (needs `contents: write`; the `--promote` step is manual or a separate main-branch job), statistical significance of metric deltas (e.g. a bootstrap CI on the eval set), model artifact storage/registry, PR comment bot.
