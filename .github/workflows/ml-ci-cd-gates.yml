@@ -1,0 +1,42 @@
+name: ml-ci-cd-gates
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Unit tests (incl. the deliberately-bad-change demonstrations)
+        run: python -m pytest -q
+      - name: Champion from the base branch (a PR must not move its own bar)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "$GITHUB_BASE_REF"
+          if git show "origin/$GITHUB_BASE_REF:champion/champion.json" > "$RUNNER_TEMP/champion.json"; then
+            echo "CHAMPION_ARGS=--champion $RUNNER_TEMP/champion.json" >> "$GITHUB_ENV"
+          else
+            echo "::warning::no champion on the base branch yet (bootstrap PR): comparing with the PR's own champion.json"
+          fi
+      - name: Train candidate, compare with champion, check data schema
+        if: always()
+        run: python -m gates.gate $CHAMPION_ARGS   # exit 1 on regression or schema change; writes the job summary
+      - name: Publish evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-eval-report
+          path: report/
